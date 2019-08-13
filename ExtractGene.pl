@@ -8,8 +8,8 @@ use File::Basename;
 
 sub checkOptions {
     my %opts;
-    getopts('hi:q:o:n:L:I:S:f', \%opts);
-    my ($help, $fasta, $query, $outDir, $outName, $length, $identity, $frag);
+    getopts('hi:q:o:n:L:I:S', \%opts);
+    my ($help, $fasta, $query, $outDir, $outName, $length, $identity);
 
     if ($opts{h}) {
         $help = $opts{h};
@@ -81,10 +81,10 @@ sub checkOptions {
         print "The default length threshold of 0.5 will be used\n";
     }
 
-    $identity = 0.5;
+    $identity = 50;
     if ($opts{I}) {
         if ($opts{I} >= 0 && $opts{I} <= 1) {
-            $identity = $opts{I};
+            $identity = $opts{I} * 100.0;
             print "The alignment identity threshold: $identity\n";
         } else {
             print "The alignment identity threshold has to be a number between 0 and 1\n";
@@ -94,15 +94,7 @@ sub checkOptions {
         print "The default identity threshold of 0.5 will be used\n";
     }
 
-    if ($opts{f}) {
-        $frag = 1;
-        print "The extract fragment flag has been given\n";
-    } else {
-        $frag = 0;
-    }
-
-    #($help, $fastq1, $fastq2, $query, $outDir, $outName, $length, $identity, $gSize, $frag)
-    return($help, $fasta, $query, $outDir, $outName, $length, $identity, $frag);
+    return($help, $fasta, $query, $outDir, $outName, $length, $identity);
 }
 
 sub help {
@@ -180,7 +172,7 @@ sub extractIDsFromFasta {
 }
 
 sub extractTargetFragment {
-    my ($query_name, $query_length) = @_;
+    my ($assembly_fasta, $query_length, $pid_threshold, $coverage_threshold) = @_;
     print "Extracting target fragment\n";
 
     system("blastn -db TEMP_nucl_blast_db -query TEMP_query_sequence.fna -outfmt 6 -word_size 7 -out TEMP_assembly-vs-query_blast.txt");
@@ -198,7 +190,7 @@ sub extractTargetFragment {
     print "% identity of best hit against the query sequence: $best_identity\n";
     print "length of best hit against the query sequence: $best_len\n";
 
-    if ($best_identity >= 50 && $frag_length >= 0.50) {
+    if ($best_identity >= $pid_threshold && $frag_length >= $coverage_threshold) {
         if ($bestArray[8] < $bestArray[9]) {
             #my $frag_start = $bestArray[8] - 1;
             my $blast_endDiff = $query_length - $bestArray[7];
@@ -207,7 +199,7 @@ sub extractTargetFragment {
             open(my $fh, '>', 'TEMP_frwd_extract.bed') or die "Could not open file 'TEMP_frwd_extract.bed' $!";
             print $fh "$best_name\t$frag_start\t$frag_end\n";
             close $fh;
-            my $extract_frag_frwd = `bedtools getfasta -fi ./velvet_output/contigs.fa -bed TEMP_frwd_extract.bed -fo stdout`;
+            my $extract_frag_frwd = `bedtools getfasta -fi $assembly_fasta -bed TEMP_frwd_extract.bed -fo stdout`;
 
             return $extract_frag_frwd;
         } elsif ($bestArray[9] < $bestArray[8]) {
@@ -236,19 +228,9 @@ sub extractTargetFragment {
 
 }
 
-my ($help, $fasta, $query, $outDir, $outName, $length, $identity, $gSize, $frag) = checkOptions(@ARGV);
+my ($help, $fasta, $query, $outDir, $outName, $length_threshold, $identity_threshold) = checkOptions(@ARGV);
 
 chdir "$outDir";
-
-print "Beginning Prodigal\n";
-system("prodigal -c -f gff -i $fasta -a PRE_$outName.faa -o prodigal_$outName.gff -d PRE_$outName.fasta");
-`cat PRE_"$outName".faa | sed 's/ # .*//g' > prodigal_"$outName".faa`;
-`cat PRE_"$outName".fasta | sed 's/ # .*//g' > prodigal_"$outName".fna`;
-unlink("PRE_$outName.faa");
-unlink("PRE_$outName.fasta");
-
-print "Create a blast database using the predicted genes obtained from Prodigal\n";
-system("makeblastdb -in prodigal_$outName.fna -dbtype nucl -out TEMP_prod_nucl_blast_db");
 
 print "Create a blast database using the assembled contigs.\n";
 system("makeblastdb -in $fasta -dbtype nucl -out TEMP_nucl_blast_db");
@@ -267,54 +249,20 @@ foreach my $query_name (@query_names) {
     my $query_seq = extractFastaByID($query_name, $query);
     my $query_length = fasta_seq_length($query_seq);
 
-    # First get the best match to the query in the Prodigal gene database
-    open(my $qOUT, ">", 'TEMP_query_sequence.fna') or die "Could not open file TEMP_query_sequence.fna: $!";
+    # Write temporary query sequence file
+    open ( my $qOUT, ">", 'TEMP_query_sequence.fna' ) or die "Could not open file TEMP_query_sequence.fna: $!";
     print $qOUT $query_seq;
     close $qOUT;
-    system("blastn -db TEMP_prod_nucl_blast_db -query TEMP_query_sequence.fna -outfmt 6 -word_size 7 -out TEMP_prod-vs-query_blast.txt");
 
-    ###Get the best blast hit by sorting the blast output by bit score, then % ID, then alignment length and select the first hit as the best match.###
-    my $bestHit = `cat TEMP_prod-vs-query_blast.txt | sort -k12,12 -nr -k3,3 -k4,4 | head -n 1`;
-    my @bestArray = split('\t', $bestHit);
-    my $best_name = $bestArray[1];
-    my $best_iden = $bestArray[2];
-    my $best_len = $bestArray[3];
-    #my $query_strt = $bestArray[6];
-    #my $query_end = $bestArray[7];
-    my $match_len = $length * $query_length;
-    my $match_iden = $identity * 100;
+    print $exOUT "$query_name Query Fragment Sequence:\n";
+    my $fragment_fasta_str = extractTargetFragment($fasta, $query_length, $identity_threshold, $length_threshold);
 
-    print "\nprodigal gene name of best hit against the query sequence: $best_name\n";
-    print "% identity of best hit against the query sequence: $best_iden\n";
-    print "length of best hit against the query sequence: $best_len\n";
-    print "match length threshold: $match_len\n";
-
-    if ($best_iden >= $match_iden && $best_len >= $match_len) {
-        my $prodigal_fna = extractFastaByID($best_name, "prodigal_$outName.fna");
-        my $prodigal_faa = extractFastaByID($best_name, "prodigal_$outName.faa");
-        print $exOUT "$prodigal_fna\n$prodigal_faa\n\n";
+    if (defined $fragment_fasta_str & 0 != length($fragment_fasta_str)) {
+        print $exOUT "$fragment_fasta_str";
     } else {
         open(my $errOUT, ">>", $error_out) or die "Could not open file $error_out: $!";
-        print $errOUT "Gene Extraction: The best blast hit ($best_name) for $query_name didn't meet minimum criteria of length and identity to call a true match\n\n";
+        print $errOUT "Frag Extraction: The best blast hit for $query_name fragment didn't meet minimum criteria of length and identity to call a true match\n\n";
         close $errOUT;
-        #next;
-    }
-
-    ###If the '-f' flag is called, then the script will also extract just the section of the target sequence that corresponds to the query fragment.###
-    ###If the best blast hit didn't include the entire query fragment, then the code will calculate the expected start/end coordinates of the complete fragment
-    ###and will attempt to extract the full fragment from the predicted gene sequence.###
-    ###The number of non-aligning bases at each end of the matching target sequence will recorded in the header name.###
-    if ($frag) {
-        print $exOUT "\n$query_name Query Fragment Sequence:\n";
-        my $fragment_fasta_str = extractTargetFragment($query_name, $query_length);
-        if (defined $fragment_fasta_str & 0 != length($fragment_fasta_str)) {
-            print $exOUT "$fragment_fasta_str";
-        } else {
-            open(my $errOUT, ">>", $error_out) or die "Could not open file $error_out: $!";
-            print $errOUT "Frag Extraction: The best blast hit ($best_name) for $query_name fragment didn't meet minimum criteria of length and identity to call a true match\n\n";
-            close $errOUT;
-        }
     }
     close $exOUT;
 }
-chdir("..")
