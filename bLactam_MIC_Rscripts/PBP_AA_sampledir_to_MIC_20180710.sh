@@ -1,7 +1,4 @@
 #!/bin/bash -l
-source /etc/profile.d/modules.sh
-#module load EMBOSS/6.4.0
-#module load  R/3.3.2
 
 x1="0"
 if [ -d "$1" ]; then
@@ -36,20 +33,20 @@ mkdir -p $AAseqDir
 cd  $AAseqDir
 
 rm -f temp*
-sed -e '1,/1A-S2 Query/d' "$d1""/EXTRACT_1A-S2_target.fasta" > temp1.fna
+cp -f "$d1""/EXTRACT_1A-S2_target.fasta" temp1.fna
 transeq temp1.fna temp1.faa -frame=1
 echo ">Sample1" > Sample_PBP1A_AA.faa
 grep -v ">" temp1.faa >> Sample_PBP1A_AA.faa
 
 
 rm -f temp*
-sed -e '1,/2B-S2 Query/d' "$d1""/EXTRACT_2B-S2_target.fasta" > temp1.fna
+cp -f "$d1""/EXTRACT_2B-S2_target.fasta" temp1.fna
 transeq temp1.fna temp1.faa -frame=1
 echo ">Sample1" > Sample_PBP2B_AA.faa
 grep -v ">" temp1.faa >> Sample_PBP2B_AA.faa
 
 rm -f temp*
-sed -e '1,/2X-S2 Query/d' "$d1""/EXTRACT_2X-S2_target.fasta" > temp1.fna
+cp -f "$d1""/EXTRACT_2X-S2_target.fasta" temp1.fna
 transeq temp1.fna temp1.faa -frame=1
 echo ">Sample1" > Sample_PBP2X_AA.faa
 grep -v ">" temp1.faa >> Sample_PBP2X_AA.faa
@@ -60,8 +57,6 @@ rm -f temp*
 #scr1="/scicomp/groups/OID/NCIRD/DBD/RDB/Strep_Lab/External/share/PBP_AA_to_MIC/scripts/AAtoMICwrapper_2.sh"
 scr1="$path/bLactam_MIC_Rscripts/AAtoMICwrapper_2.sh"
 bash $scr1 $AAseqDir
-
-# Use Aspen Cluster to run; BioLinux will not work
 
 #
 fin="$AAseqDir"/Sample_PBPtype_MIC2_Prediction.csv
