@@ -28,9 +28,11 @@ else
   exit 1
 fi
 
+data_dir=${path}/bLactam_MIC_Rscripts
+
 AAseqDir="$d1""/PBP_to_MIC_temp"
-mkdir -p $AAseqDir
-cd  $AAseqDir
+mkdir -p ${AAseqDir}
+cd  ${AAseqDir}
 
 rm -f temp*
 cp -f "$d1""/EXTRACT_1A-S2_target.fasta" temp1.fna
@@ -54,15 +56,13 @@ grep -v ">" temp1.faa >> Sample_PBP2X_AA.faa
 rm -f temp*
 
 #
-#scr1="/scicomp/groups/OID/NCIRD/DBD/RDB/Strep_Lab/External/share/PBP_AA_to_MIC/scripts/AAtoMICwrapper_2.sh"
-scr1="$path/bLactam_MIC_Rscripts/AAtoMICwrapper_2.sh"
-bash $scr1 $AAseqDir
+scr1="${data_dir}/AAtoMICwrapper_2.sh"
+bash ${scr1} ${AAseqDir} ${data_dir}
 
 #
 fin="$AAseqDir"/Sample_PBPtype_MIC2_Prediction.csv
-#scr1="/scicomp/groups/OID/NCIRD/DBD/RDB/Strep_Lab/External/share/PBP_AA_to_MIC/scripts/MIC_format_with_SIR.R"
 scr1="$path/bLactam_MIC_Rscripts/MIC_format_with_SIR.R"
-Rscript $scr1 $fin
+Rscript ${scr1} ${fin}
 fout="$AAseqDir"/Sample_PBPtype_MIC2_Prediction.csv_MIC_formatted_with_SIR.csv
 
 #20180710
