@@ -14,24 +14,19 @@ RUN apt update \
         gcc \
         build-essential \
         libx11-dev \
-        emboss \
       && rm -rf /var/lib/apt/lists/*
 
 # Install BLAST
-RUN mkdir /opt/blast \
+RUN  mkdir -p /tmp/blast \
+      && mkdir /opt/blast \
       && curl ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.9.0/ncbi-blast-2.9.0+-x64-linux.tar.gz \
-      | tar -zxC /opt/blast --strip-components=1
+      | tar -zxC /tmp/blast --strip-components=1 \
+      && cd /tmp/blast/bin \
+      && mv blastn makeblastdb blastp /opt/blast/ \
+      && cd .. \
+      && rm -rf /tmp/blast
 
-ENV PATH /opt/blast/bin:$PATH
-
-## Install EMBOSS
-#RUN mkdir /opt/emboss \
-#      && curl ftp://emboss.open-bio.org/pub/EMBOSS/EMBOSS-6.6.0.tar.gz | tar -zxC /opt/emboss --strip-components=1 \
-#      && cd /opt/emboss \
-#      && ./configure \
-#      && make
-
-ENV PATH /opt/emboss/bin:$PATH
+ENV PATH /opt/blast:$PATH
 
 # Install BEDTools
 RUN curl -L -O -J https://github.com/arq5x/bedtools2/releases/download/v2.28.0/bedtools \
@@ -50,6 +45,10 @@ RUN curl -L -O -J http://www.clustal.org/omega/clustalo-1.2.4-Ubuntu-x86_64 \
        && chmod +x clustalo \
        && mv clustalo /usr/local/bin/
 
+# Install CPAN dependencies
+RUN cpan App::cpanminus \
+      && cpan JSON
+
 # Copy in scripts & libs
 RUN mkdir -p /predictor/SPN_Reference_DB
 
@@ -65,12 +64,19 @@ COPY PBP-Gene_Typer.pl /predictor/
 
 COPY pw_wrapper.sh /predictor/
 
+COPY to_json.pl /predictor/
+
+COPY transeq.pl /predictor/
+
 COPY entrypoint.sh /predictor/
 
 RUN cd /predictor \
       && chmod +x *.sh \
       && chmod +x *.pl
 
+ENV PATH /predictor:$PATH
+
 WORKDIR /predictor/
 
+#ENTRYPOINT ["/bin/bash"]
 ENTRYPOINT ["/predictor/entrypoint.sh"]
