@@ -1,3 +1,3 @@
 if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager", repos='http://cran.us.r-project.org')
-BiocManager::install(c("Biostrings", "randomForest", "iterators", "foreach", "glmnet"))
+    install.packages("BiocManager", repos='https://cloud.r-project.org/')
+BiocManager::install(c("Biostrings", "iterators", "foreach", "glmnet"))

@@ -39,6 +39,10 @@ COPY install_r_dependencies.R /install_r_dependencies.R
 RUN Rscript /install_r_dependencies.R \
       && rm -f /install_r_dependencies.R
 
+RUN curl -L -O -J https://cran.r-project.org/src/contrib/Archive/randomForest/randomForest_4.6-14.tar.gz \
+      && R CMD INSTALL randomForest_4.6-14.tar.gz \
+      && rm -rf randomForest_4.6-14.tar.gz
+
 # Install Clustal Omega
 RUN curl -L -O -J http://www.clustal.org/omega/clustalo-1.2.4-Ubuntu-x86_64 \
        && mv clustalo-1.2.4-Ubuntu-x86_64 clustalo \
